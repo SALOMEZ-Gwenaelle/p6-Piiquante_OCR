@@ -1,6 +1,6 @@
 // Importation des packages installé dans le terminal
 const sauce = require('../models/sauces') // Importation du schéma des sauces
-
+const fs = require('fs'); //on importe le module "file system" de node pour travailler sur les fichiers (pour être capable de supprimer une image)
 
 //Récupèrer/Afficher un tableau de toutes les sauces de la base de données
 exports.getAllSauces = (req, res, next) => {
@@ -23,6 +23,7 @@ exports.createSauces = (req, res, next) => {
     const saucesObject = JSON.parse(req.body.sauce); // parser (parcourir en lisant) l'objet
     delete saucesObject._id; // Supprime l'ID fournit par le front car MongoDB crée le sien automatiquement 
     delete saucesObject._userId; // Supprime le userID fournit par le front 
+    const securedImageName = req.file.filename.replace(/^[a-zA-Z0-9_.-]*/);   // on utilise une Regex pour avoir un nom de fichier qui ne comporte que des chiffres, des lettres et -_.
     const saucesCree = new sauce({
        ...saucesObject, // création de la sauce moins les objets supprimés
        userId: req.auth.userId, // extraction de l'userid de l'objet requete grace au middleware
@@ -30,7 +31,7 @@ exports.createSauces = (req, res, next) => {
        dislikes: 0,
        usersLiked: [],
        usersDisliked: [],
-       imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}` //url complète de l'image 
+       imageUrl: `${req.protocol}://${req.get('host')}/images/${securedImageName}` //url complète de l'image 
     });
  
    saucesCree.save() // enregistrement de l'objet
@@ -41,22 +42,48 @@ exports.createSauces = (req, res, next) => {
 // Modifier une sauce spécifique
 exports.modifySauces = (req, res, next) => {
     const sauceObject = req.file ? { //vérifier si il un a un champ file dans notre objet requete
+        // il y a un fichier, il faut donc supprimer la précédente image
         ...JSON.parse(req.body.sauce), //on récupère l'objet en parsant la chaine de caractère
         imageUrl: `${req.protocol}://${req.get('host')}/images/${req.file.filename}` // et on recréant l'url de l'image
     } : {...req.body }; //si non on récupère l'objet directement dans le corps de la requete
 
-    sauce.updateOne({ _id: req.params.id }, { ...sauceObject, _id: req.params.id }) // methode updateOne pour modifier l'objet(sauce)
-          .then(() => res.status(200).json({ message: 'Sauce modifiée !'}))
-          .catch(error => res.status(400).json({ error }));
+    function update() {   // la mise à jour est contenue dans une fonction que nous appellerons plus tard
+      sauce.updateOne({ _id: req.params.id }, { ...sauceObject, _id: req.params.id }) // méthode updateOne pour modifier l'objet(sauce)
+      .then(() => res.status(200).json({ message: 'Sauce modifiée !'}))
+      .catch(error => res.status(400).json({ error }));
+    }   
+
+    // si j'ai une nouvele image pour le produit, alors il faut supprimer l'ancienne image
+    if (req.file) {
+        sauce.findOne({ _id: req.params.id }) // on récupère la sauce dans la base de données
+        .then((Sauce) => {
+            const filename = Sauce.imageUrl.split("/images/")[1]; // on récupère le nom de l'image à supprimer
+            fs.unlink(`images/${filename}`, () => {
+              update();   // on met à jour la sauce une fois le fichier image supprimé
+            });  // on supprime l'image à l'aide du module node "fs"
+        }).catch(error => { res.status(400).json( { error })})
+    } else {
+      update();   // nous n'avons pas à supprimer d'image, donc nous mettons à jour la sauce immédiatement
+    }
+
+    
     
 };
 
 // Suprimer une sauce spécifique
 exports.deleteSauces = (req, res, next) => {
+  sauce.findOne({ _id: req.params.id })
+  .then((Sauce) => {
+    const filename = Sauce.imageUrl.split("/images/")[1];
+    fs.unlink(`images/${filename}`, () => {
         sauce.deleteOne({ _id: req.params.id }) // methode deleteOne pour supprimer un objet dans la base de données
           .then(() => res.status(200).json({ message: 'Sauce supprimée !'}))
           .catch(error => res.status(400).json({ error }));
-    
+    });
+  })
+  .catch((error) => {
+    res.status(500).json({ error });
+  });
 };
 
 
@@ -107,8 +134,5 @@ exports.createLikeSauces = (req, res, next) => {
           console.log(error);
 
     }
-
-
-
 
 }

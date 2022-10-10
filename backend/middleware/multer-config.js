@@ -1,7 +1,6 @@
 // Importation des packages installé dans le terminal
 const multer = require('multer'); // Importation de MULTER 
 
-
 // Dictionnaire des extensions de fichiers
 const MIME_TYPES = {
     'image/jpg': 'jpg',

@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken'); // Importation du package de token d'authen
 
 // Importation en local
 const User = require('../models/users'); // Importation du schéma users
+require('dotenv').config(); // Importation de DOTENV
 
 // Function signup pour s'inscrire
 exports.signup = (req, res, next) => {
@@ -39,7 +40,7 @@ exports.login = (req, res, next) => {
 
                         token: jwt.sign ( // le token - function de jwt avec sign
                         { userId: user._id }, //1er argument : le user id qu'on encode
-                           'RANDOM_TOKEN_SECRET', //2è arguement : clé secrete pour encodage
+                        process.env.JWT_TOKEN, //2è arguement : clé secrete pour encodage, récupérée de la variable d'environnement
                         { expiresIn: '24h' } // 3è arguement : expiration du token
                         )    
                     });
